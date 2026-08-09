@@ -9,6 +9,9 @@
 import { darfRaumOeffnen, raumVermerkt } from "./bremse.js";
 import { cleanName, raumverwaltung, shuffle } from "./raum.js";
 import { starte } from "./statisch.js";
+// Gebote und Zaehlen liegen in einer eigenen Datei, damit `probe.js` dieselben
+// Funktionen pruefen kann, die hier laufen.
+import { gueltig, hoeher, wuerfel, zaehle as zaehleBecher } from "./gebote.js";
 
 const PORT = Number(Deno.env.get("PORT") ?? 8065);
 const HOST = Deno.env.get("HOST") ?? "0.0.0.0";
@@ -18,8 +21,6 @@ const MAX_PLAYERS = 6;
 const MIN_PLAYERS = 2;
 const START_WUERFEL = 5;
 const AUFDECK_MS = 6000;
-
-const wuerfel = (n) => Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 6));
 
 const {
   rooms, browsing,
@@ -94,16 +95,13 @@ function weiterWennWeg(room) {
 const gesamtWuerfel = (room) =>
   room.reihe.reduce((n, id) => n + (room.players.get(id)?.becher.length ?? 0), 0);
 
-/** Zählt, wie oft die Augenzahl auf dem Tisch liegt – Einser als Joker. */
-function zaehle(room, augen) {
-  let n = 0;
-  for (const id of room.reihe) {
-    for (const w of room.players.get(id)?.becher ?? []) {
-      if (w === augen || (room.settings.joker && w === 1)) n++;
-    }
-  }
-  return n;
-}
+/** Zählt, wie oft die Augenzahl auf dem Tisch liegt – gerechnet in gebote.js. */
+const zaehle = (room, augen) =>
+  zaehleBecher(
+    room.reihe.map((id) => room.players.get(id)?.becher ?? []),
+    augen,
+    room.settings.joker,
+  );
 
 function aufdecken(room, zweiflerId) {
   const g = room.gebot;
@@ -112,8 +110,10 @@ function aufdecken(room, zweiflerId) {
   const bieterHatRecht = tatsaechlich >= g.anzahl;
   const verliererId = bieterHatRecht ? zweiflerId : g.von;
   const verlierer = room.players.get(verliererId);
-  if (verlierer) verlierer.becher.pop();
 
+  // Erst abbilden, dann wegnehmen. Andersherum zeigt die Aufdeckung einen
+  // Becher, in dem der verlorene Würfel schon fehlt – und dann passt die Zahl
+  // daneben nicht zu dem, was auf dem Tisch zu sehen ist.
   room.aufdeckung = {
     gebot: { anzahl: g.anzahl, augen: g.augen, von: name(room, g.von) },
     zweifler: name(room, zweiflerId),
@@ -124,6 +124,7 @@ function aufdecken(room, zweiflerId) {
       wuerfel: [...(room.players.get(id)?.becher ?? [])],
     })),
   };
+  if (verlierer) verlierer.becher.pop();
   room.schritt = "aufdecken";
   pushRunde(room);
 
@@ -316,12 +317,8 @@ function handle(ws, msg) {
       if (room.amZug !== player.id) break;
       const anzahl = Number(msg.anzahl);
       const augen = Number(msg.augen);
-      if (!Number.isInteger(anzahl) || anzahl < 1 || anzahl > gesamtWuerfel(room)) break;
-      // Auf Einser wird nicht geboten – sie sind Joker.
-      if (!Number.isInteger(augen) || augen < 2 || augen > 6) break;
-      const g = room.gebot;
-      // Höher heißt: mehr Würfel, oder gleich viele mit höherer Augenzahl.
-      if (g && !(anzahl > g.anzahl || (anzahl === g.anzahl && augen > g.augen))) break;
+      if (!gueltig(anzahl, augen, gesamtWuerfel(room))) break;
+      if (!hoeher({ anzahl, augen }, room.gebot)) break;
       room.gebot = { von: player.id, anzahl, augen };
       room.amZug = naechster(room, player.id);
       pushRunde(room);
