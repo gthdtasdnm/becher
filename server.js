@@ -189,14 +189,30 @@ function finishGame(room) {
   room.phase = "final";
   const sieger = room.reihe.map((id) => name(room, id));
   const tabelle = [
-    ...sieger.map((n) => ({ name: n, wert: "gewonnen", punkte: 100 })),
-    ...room.raus.map((n, i) => ({ name: n, wert: `Platz ${i + 2}`, punkte: -i })),
+    // Satz und Schluessel: uebersetzt wird im Client, weil am selben Tisch
+    // jeder eine andere Sprache eingestellt haben kann.
+    ...sieger.map((n) => ({
+      name: n,
+      wert: { text: "gewonnen", k: "becher.gewonnen" },
+      punkte: 100,
+    })),
+    ...room.raus.map((n, i) => ({
+      name: n,
+      wert: { text: `Platz ${i + 2}`, k: "becher.platz", w: { n: i + 2 } },
+      punkte: -i,
+    })),
   ];
   for (const p of room.players.values()) p.ready = false;
   broadcast(room, {
     t: "final",
     tabelle,
-    untertitel: sieger.length ? `${sieger.join(", ")} hat als Letzter noch Würfel.` : "Abgebrochen",
+    untertitel: sieger.length
+      ? {
+        text: `${sieger.join(", ")} hat als Letzter noch Würfel.`,
+        k: "becher.letzter",
+        w: { name: sieger.join(", ") },
+      }
+      : { text: "Abgebrochen", k: "becher.abgebrochen" },
   });
   pushState(room);
   pushRoomList();

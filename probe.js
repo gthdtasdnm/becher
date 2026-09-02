@@ -244,10 +244,10 @@ A.send({ t: "ende" });
 await bis(() => A.final, "Endstand");
 const f = A.final;
 muss(f.tabelle.length === 3, "Im Endstand fehlt jemand");
-muss(f.tabelle.filter((z) => z.wert === "gewonnen").length === 2, "Es sind nicht zwei übrig");
-muss(f.tabelle.some((z) => z.name === draussen && z.wert === "Platz 2"),
+muss(f.tabelle.filter((z) => z.wert.text === "gewonnen").length === 2, "Es sind nicht zwei übrig");
+muss(f.tabelle.some((z) => z.name === draussen && z.wert.text === "Platz 2"),
   `${draussen} müsste auf Platz 2 stehen`);
-console.log("Endstand: " + f.tabelle.map((z) => `${z.name} ${z.wert}`).join(" · "));
+console.log("Endstand: " + f.tabelle.map((z) => `${z.name} ${z.wert.text}`).join(" · "));
 
 A.send({ t: "again" });
 await bis(() => A.room.phase === "lobby", "zurück im Warteraum");
